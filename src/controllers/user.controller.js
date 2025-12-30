@@ -4,6 +4,22 @@ import { User } from "../models/user.models.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+const generateAccessAndRefreshTokens = async(userId)=>{
+    try {
+        const user = await User.findById(userId)
+        const accessToken = user.generateAccessToken()
+        const refreshToken = user.generateRefreshToken()
+
+        user.refreshToken = refreshToken //gave the user refreshToken by saving it in its object in db
+        await user.save({validateBeforeSave:false}) //as we are saving the user by just giving its one field so this false in validdate-, it will not check the other field are given or not
+
+        return {accessToken,refreshToken}
+
+    } catch (error) {
+        throw new ApiError(500,"Something went wrong while generating refresh and access token")
+    }
+}
+
 const registerUser = asyncHandler(async (req,res) => {
     console.log('------req.body started-----')
     console.log(req.body)
@@ -87,31 +103,80 @@ const registerUser = asyncHandler(async (req,res) => {
         new ApiResponse(200, createdUser, "User registered successfully")
     )
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     //dummy code
     // res.status(200).json({
     //     message:"ok"
     // })//we are sending this to user
 })
 
+const loginUser = asyncHandler(async (req,res)=>{
+    //step-1: taking req.body from user
+    const {email,username,password} = req.body
 
-export {registerUser}
+    if(!username || !email){
+        throw new ApiError(400,"Either username or email is required")
+    }
+
+    //step-2: find the user
+    const user = await User.findOne({
+        $or:[{username},{email}]
+    })
+
+    if(!user){
+        throw new ApiError(404,"User does not exist Sign Up")
+    }
+
+    //step-3: password correction check
+    const isPasswordValid = await user.isPasswordCorrect(password)
+
+    if(!isPasswordValid){
+        throw new ApiError(401,"Invalid user credentials")
+    }
+
+    //step -4: generate access and refresh tokens
+    const {accessToken,refreshToken} = await generateAccessAndRefreshTokens(user._id)
+
+    const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
+
+    const options = {
+        httpOnly:true,
+        secure:true
+    }//now the cookies can't be modified by frontend can only be done by server
+
+    return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json(
+        new ApiResponse(200,{
+            user: loggedInUser,accessToken,refreshToken
+        },"User logged in Successfully"
+    )
+    )
+
+
+
+
+
+})
+
+const logoutUser = asyncHandler(async(req,res)=>{
+    User.findByIdAndUpdate(
+       await req.user._id,
+        {
+            $set: {
+                refreshToken: undefined
+            }
+        },
+        {
+            new:true
+        }
+    )
+
+    const options = {
+        httpOnly:true,
+        secure:true
+    }
+    
+    return res.status(200).clearCookie("accessToken",options).clearCookie("refreshToken",options).json(new ApiResponse(200,{},"User logged Out"))
+})
+
+
+
+export {registerUser,loginUser,logoutUser}
