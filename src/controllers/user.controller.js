@@ -352,7 +352,7 @@ const getUserChannelProfile = asyncHandler(async(req,res)=>{
         {
             $lookup: {//here we will get how many user did current user subscribed, current user ki id kis kis subscription document ke subscriber field me h
                 from:"subscriptions",
-                locaField: "_id",
+                localField: "_id",
                 foreignField: "subscriber",
                 as: "subscribedTo"
             }
@@ -406,4 +406,52 @@ const getUserChannelProfile = asyncHandler(async(req,res)=>{
 
 })
 
-export {registerUser,loginUser,logoutUser,refreshAccessToken,changeCurrentPassword,getCurrentUser,updateAccountDetails,updateUserAvatar,updateUserCoverImage,getUserChannelProfile}
+const getWatchHistory = asyncHandler(async(req,res)=>{
+    const user = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(req.user._id) // we have to select that user for which which we want the search history , to get its id req.user._id is complete bu it gives id like ObjectId("<id>") but we want only <id> so this property of mogoose does the job
+            },//now we have that user id for which we want to know the watch history
+        },
+        {
+            $lookup:{
+                from: "videos",//it tells where to look
+                localField:"watchHistory",//what to look from user field
+                foreignField:"_id",//what to look from video
+                as:"watchHistory",//what that look up named as
+                //now we will get the watchHistory we will get video details but can't get the full details of the owner of the details as it it also a data field to look so we will have to write sub pipeline to aggregate owner information with the video
+                pipeline:[
+                    { // fo this sub pipeline local is videos
+                        $lookup:{
+                            from:"users", //we have to search from users
+                            localField:"owner",//it is associated with videos
+                            foreignField:"_id", //it is associated to users
+                            as:"owner",
+                            //now further we don't want all information of the owner to show , just project some using another subpipeline or we can later also do that but here we are using a sub-pipeline
+                            pipeline:[{
+                                $project:{
+                                    fullname:1,
+                                    username: 1,
+                                    avatar:1
+                                }
+                            }]
+                        }
+                    },
+                    {   // we don't necessarily need it as data will come in form of array and our all desired data is inside owner 
+                        $addFields:{
+                            owner:{
+                                $first: "$owner"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ])
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200,user[0].watchHistory,"Watch history fetched successfully"))
+})
+
+export {registerUser,loginUser,logoutUser,refreshAccessToken,changeCurrentPassword,getCurrentUser,updateAccountDetails,updateUserAvatar,updateUserCoverImage,getUserChannelProfile,getWatchHistory}
