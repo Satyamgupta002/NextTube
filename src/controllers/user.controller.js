@@ -4,6 +4,8 @@ import { User } from "../models/user.models.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken"
+import mongoose from "mongoose";
+
 
 const generateAccessAndRefreshTokens = async(userId)=>{
     try {
@@ -144,6 +146,7 @@ const loginUser = asyncHandler(async (req,res)=>{
     const {accessToken,refreshToken} = await generateAccessAndRefreshTokens(user._id)
 
     const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
+    console.log("User id in login: ",user._id)
 
     const options = {
         httpOnly:true,
@@ -164,6 +167,7 @@ const loginUser = asyncHandler(async (req,res)=>{
 })
 
 const logoutUser = asyncHandler(async(req,res)=>{
+    // console.log(req.body)
     User.findByIdAndUpdate(
        await req.user._id,
         {
@@ -226,12 +230,13 @@ const refreshAccessToken = asyncHandler(async (req,res)=>{
 })
 
 const changeCurrentPassword = asyncHandler(async(req,res)=>{
+    console.log(req.body)
     const {oldPassword,newPassword} = req.body //it will come from user input field
-    const user = User.findById(req.user?._id)
+    const user = await User.findById(req.user?._id)
 
-    const isPasswordCorrect = await user. isPasswordCorrect(oldPassword)//matching old password
+    const isPasswordMatch = await user.isPasswordCorrect(oldPassword)//matching old password
 
-    if(!isPasswordCorrect){
+    if(!isPasswordMatch){
         throw new ApiError(400, "Invalid Old Password")
     }
 
@@ -248,7 +253,7 @@ const changeCurrentPassword = asyncHandler(async(req,res)=>{
 const getCurrentUser = asyncHandler(async(req,res)=>{
     return res
     .status(200)
-    .json(200,req.user,"current user fetched successfully")
+    .json(new ApiResponse(200,req.user,"current user fetched successfully"))
 })
 
 const updateAccountDetails = asyncHandler(async(req,res)=>{
@@ -326,6 +331,7 @@ const updateUserCoverImage = asyncHandler(async(req,res) => {
 })
 
 const getUserChannelProfile = asyncHandler(async(req,res)=>{
+    console.log(req.params)
     const {username} = req.params //as user will ask in search that user profile he want to see
 
 
@@ -359,29 +365,39 @@ const getUserChannelProfile = asyncHandler(async(req,res)=>{
                 as: "subscribedTo"
             }
         },
+        {
+            $lookup:{
+                from:"videos",
+                localField:"_id",
+                foreignField: "owner",
+                as: "videosOfUser"
+            }
+        },
         {   //now we have to add extra field along with the current user details and count the subscribers and subscribedTo (so two information also added)
             $addFields:{
                 subscribersCount:{
                     $size: "$subscribers"
                 },
                 channelsSubscribedToCount: {
-                    $size: "subscribedTo"
+                    $size: "$subscribedTo"
                 },
                 isSubscribed:{
                     $cond:{
                         if:{
-                            $in: [req.user?._id,"subscribers.subscriber"]
+                            $in: [req.user?._id,"$subscribers.subscriber"]
                         },
                         then:true,
                         else:false
                     }
-                }
+                },
+                videosByUser:"$videosOfUser"
             }
         },
         {//now so much information we are getting but we want selective information to show(what information we actually wanted to send)
             $project:{
                 fullname: 1,
                 username:1,
+                videosByUser:1,
                 subscribersCount: 1,
                 channelsSubscribedToCount: 1,
                 isSubscribed: 1,

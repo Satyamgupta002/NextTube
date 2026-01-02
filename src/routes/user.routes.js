@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { changeCurrentPassword, registerUser, getCurrentUser, updateAccountDetails, updateUserAvatar, updateUserCoverImage, getUserChannelProfile, getWatchHistory } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
-const router = Router()
 import { loginUser } from "../controllers/user.controller.js";
 import { logoutUser } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { refreshAccessToken } from "../controllers/user.controller.js";
+
+const router = Router()
 
 router.route("/register").post(
     upload.fields([
@@ -27,11 +28,12 @@ router.route("/logout").post(verifyJWT, logoutUser) //we used middleware before 
 
 router.route("/refresh-token").post(refreshAccessToken)  //here we did not user our auth middleware veritfyJWT because here we will just use cookies stored in his browser sent with the refresh token request
 
-router.route("/change-password").post(verifyJWT, changeCurrentPassword) // though you can change the password when you are logged in but at the server side we will make it authenticate the user as server runs on coming request he does not remember the user.
+router.route("/change-password").post(upload.none(),verifyJWT, changeCurrentPassword) // though you can change the password when you are logged in but at the server side we will make it authenticate the user as server runs on coming request he does not remember the user.
+//if we are taking data through direct json then don't need to write upload.none() but if we are taking form data then it is needed to put upload.none()
 
-router.route("/current-user").post(verifyJWT, getCurrentUser)
+router.route("/current-user").get(verifyJWT, getCurrentUser)
 
-router.route("/update-account").post(verifyJWT, updateAccountDetails)
+router.route("/update-account").post(upload.none(),verifyJWT, updateAccountDetails)
 
 router.route("/avatar").patch(verifyJWT, upload.single("avatar"), updateUserAvatar)
 
