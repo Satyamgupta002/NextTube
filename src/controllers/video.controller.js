@@ -112,7 +112,6 @@ const updateVideoDetails = asyncHandler(async (req, res) => {
     }
 
     if(thumbnailLocalPath){
-        console.log("Hii #####")
         const thumbnail = await uploadOnCloudinary(thumbnailLocalPath)
         if(!thumbnail){
             throw new ApiError(400,"Something happened when uploading thumbnail on cloudinary")
@@ -131,6 +130,54 @@ const updateVideoDetails = asyncHandler(async (req, res) => {
     
 })
 
+const deleteVideo = asyncHandler(async (req, res) => {
+    const { videoIdtoDelete } = req.params
+
+    //TODO: delete video
+    let video = await Video.findById(videoIdtoDelete)
+ 
+    if(!video){
+        throw new ApiError(400, "Video File with this Id not found")
+    }
+
+    if(String(video.owner) != String(req.user._id)){
+        throw new ApiError(404,"Unauthorized Request to Delete video")
+    }
+    const deletedVideo = await Video.findByIdAndDelete(videoIdtoDelete)
+
+    if(!deletedVideo){
+        throw new ApiError(404,"Something error occured while deleting video")
+    }
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200,deletedVideo,"Video Deleted Successfully"))
+
+})
+
+const togglePublishStatus = asyncHandler(async (req, res) => {
+    const { videoIdtoTogglePublishStatus } = req.params
+
+     let video = await Video.findById(videoIdtoTogglePublishStatus)
+ 
+    if(!video){
+        throw new ApiError(400, "Video File with this Id not found")
+    }
+
+    if(String(video.owner) != String(req.user._id)){
+        throw new ApiError(404,"Unauthorized Request to Change publish Status")
+    }
+
+    video.isPublished = !video.isPublished
+
+    await video.save({validateBeforeSave: false})
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200,{},"Publish Status changed Successfully"))
 
 
-export {publishAVideo,getVideoById,updateVideoDetails}
+
+})
+
+export {publishAVideo,getVideoById,updateVideoDetails,deleteVideo,togglePublishStatus}
